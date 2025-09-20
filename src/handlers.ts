@@ -1,7 +1,7 @@
 import { readConfig, writeConfig } from "./config";
 import { fetchFeed } from "./fetcher";
 import { createFeedFollow, deleteFeedFollowByURLUserId, getFeedFollowsByUser } from "./lib/db/queries/feedFollows";
-import { createFeed, Feed, getFeedByID, getFeedByUrl, getFeeds } from "./lib/db/queries/feeds";
+import { createFeed, Feed, getFeedByID, getFeedByUrl, getFeeds, getNextFeedToFetch, markFeedFetched } from "./lib/db/queries/feeds";
 import { clearAllUsers, createUser, getUserByID, getUserByName, getUsers, User } from "./lib/db/queries/users";
 
 export async function unfollowHandler(user: User, _cmdname: string, url: string, ..._args: string[]) {
@@ -64,17 +64,56 @@ export async function addFeedHandler(user: User, _cmdname: string, name: string,
     printFeed(newFeed, user);
 }
 
-export async function aggHandler(_cmdname: string, ...args: string[]) {
-    const feed = await fetchFeed("https://www.wagslane.dev/index.xml")
-    console.log(feed.channel.title)
-    console.log(feed.channel.link)
-    console.log(feed.channel.description)
-    for (let item of feed.channel.item) {
-        console.log(item.title)
-        console.log(item.link)
-        console.log(item.description)
-        console.log(item.pubDate)
+export async function aggHandler(_cmdname: string, time_between_reqs: string, ..._args: string[]) {
+    const timeout = parseDuration(time_between_reqs);
+    await scrapeFeeds()
+    const interval = setInterval(() => {
+        scrapeFeeds();
+    }, timeout);
+
+    await new Promise<void>((resolve) => {
+        process.on('SIGINT', () => {
+            console.log("Shutting down feed aggregator...");
+            clearInterval(interval);
+            resolve();
+        })
+    })
+}
+
+function parseDuration(duration: string) {
+    const regex = /^(\d+)(ms|s|m|h)$/;
+    const match = duration.match(regex);
+    if (!match) {
+        throw new Error("Duration must be in the format <number><ms | s | m | h>");
     }
+    const value = parseInt(match[1]);
+    const unit = match[2];
+    switch (unit) {
+        case "ms": 
+            console.log(`Collecting feeds every ${value}ms`)
+            return value;
+        case "s": 
+            console.log(`Collecting feeds every ${value}s`)
+            return value * 1000;
+        case "m": 
+            console.log(`Collecting feeds every ${value}m0s`)
+            return value * 60 * 1000;
+        case "h": 
+            console.log(`Collecting feeds every ${value}h0m0s`)
+            return value * 60 * 60 * 1000;
+        default: throw new Error("Invalid unit");
+    }
+}
+
+async function scrapeFeeds() {
+  const nextFeed = await getNextFeedToFetch();
+  await markFeedFetched(nextFeed.id);
+  const rssFeed = await fetchFeed(nextFeed.url);
+  console.log(`Scraping feed ${rssFeed.channel.title}`);
+  const feedItems = rssFeed.channel.item;
+  for (const item of feedItems) {
+    console.log(` - ${item.title}`);
+  }
 }
 
 export async function resetHandler(_cmdname: string, ..._args: string[]) {

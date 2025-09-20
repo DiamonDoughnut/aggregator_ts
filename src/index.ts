@@ -1,5 +1,7 @@
 import { CommandRegistry, commands, RegisterCommand, RunCommand } from "./commands";
+import { fetchFeed } from "./fetcher";
 import { loginHandler, registerHandler, resetHandler } from "./handlers";
+import { getNextFeedToFetch, markFeedFetched } from "./lib/db/queries/feeds";
 
 
 async function main() {
@@ -35,5 +37,7 @@ function registerCommands(commandsRegistry: CommandRegistry) {
     RegisterCommand(commandsRegistry, name, commands[name])
   }
 }
+
+
 
 main();
