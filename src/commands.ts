@@ -1,4 +1,4 @@
-import { addFeedHandler, aggHandler, feedsHandler, followHandler, followingHandler, getExistingUser, loginHandler, registerHandler, resetHandler, unfollowHandler, usersHandler } from "./handlers";
+import { addFeedHandler, aggHandler, browseHandler, feedsHandler, followHandler, followingHandler, getExistingUser, loginHandler, registerHandler, resetHandler, unfollowHandler, usersHandler } from "./handlers";
 import { getUserByName, User } from "./lib/db/queries/users";
 
 export type CommandHandler = (cmdname: string, ...args: string[]) => Promise<void>;
@@ -17,7 +17,8 @@ export const commands: CommandRegistry = {
     feeds: feedsHandler,
     follow: middleware(followHandler),
     following: middleware(followingHandler),
-    unfollow: middleware(unfollowHandler)
+    unfollow: middleware(unfollowHandler),
+    browse: middleware(browseHandler)
 }
 
 export function RegisterCommand(registry: CommandRegistry, cmdname: string, handler: CommandHandler) {

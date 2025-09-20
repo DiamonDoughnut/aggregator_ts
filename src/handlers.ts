@@ -2,7 +2,28 @@ import { readConfig, writeConfig } from "./config";
 import { fetchFeed } from "./fetcher";
 import { createFeedFollow, deleteFeedFollowByURLUserId, getFeedFollowsByUser } from "./lib/db/queries/feedFollows";
 import { createFeed, Feed, getFeedByID, getFeedByUrl, getFeeds, getNextFeedToFetch, markFeedFetched } from "./lib/db/queries/feeds";
+import { createPost, getPosts, getPostsForUser } from "./lib/db/queries/posts";
 import { clearAllUsers, createUser, getUserByID, getUserByName, getUsers, User } from "./lib/db/queries/users";
+
+export async function browseHandler(user: User, _cmdname: string, limit: string, ..._args: string[]) {
+    if (!limit) {
+        limit = '2';
+    }
+    const limiter = parseInt(limit);
+    if(isNaN(limiter)) {
+        throw new Error("Limit must be a number")
+    }
+    //const posts = await getPosts();
+    const posts = await getPostsForUser(user.id, limiter);
+    console.log(posts.length)
+    console.log(`Showing the latest ${limiter} posts in your followed feeds`);
+    for(const post of posts) {
+        console.log(`Post: ${post.title}`);
+        console.log(` - ${post.description}`);
+        console.log(` - ${post.url}`);
+        console.log(` - ${post.publishedAt}`);
+    }
+}
 
 export async function unfollowHandler(user: User, _cmdname: string, url: string, ..._args: string[]) {
     await deleteFeedFollowByURLUserId(user.id, url);
@@ -112,9 +133,40 @@ async function scrapeFeeds() {
   console.log(`Scraping feed ${rssFeed.channel.title}`);
   const feedItems = rssFeed.channel.item;
   for (const item of feedItems) {
-    console.log(` - ${item.title}`);
+    const publishedAt = parseRSSDate(item.pubDate);
+    await createPost(item.link, nextFeed.id, item.title, item.description, publishedAt)
   }
 }
+
+function parseRSSDate(dateString: string): Date | null {
+    if (!dateString) {
+        return null;
+    }
+    let date = new Date(dateString);
+    if (!isNaN(date.getTime())) {
+        return date;
+    }
+
+    const cleanedString = dateString.trim();
+    
+    const variations = [
+        cleanedString.replace(/\s+\+\d{4}$/, ''), 
+        cleanedString.replace(/\s+[A-Z]{3}$/, ''),
+        cleanedString.replace(/\s+GMT.*$/, ''),
+    ];
+    
+    for (const variation of variations) {
+        date = new Date(variation);
+        if (!isNaN(date.getTime())) {
+            return date;
+        }
+    }
+    
+    // Fallback to current date
+    return null;
+}
+
+
 
 export async function resetHandler(_cmdname: string, ..._args: string[]) {
     try {
